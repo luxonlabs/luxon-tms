@@ -1,0 +1,16 @@
+{
+  "name": "luxon-tms",
+  "version": "1.0.0",
+  "description": "AI-Powered TMS with Rate Confirmation Parser",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'No build step needed'",
+    "start": "vercel dev"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
