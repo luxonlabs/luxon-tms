@@ -14,7 +14,7 @@ Load ID, Pickup Date, Delivery Date, Broker Company, Contact Name, Phone, Extens
 
 **RULES:**
 1. CSV format: comma-separated, no quotes, no extra spaces
-2. Dates must be M/D/YYYY format (e.g., 11/21/2025)
+2. Dates must be YYYY-MM-DD format (e.g., 2025-11-21)
 3. Posted Rate: put 0 if not in rate conf (add manually later)
 4. Email: the contact/dispatch email (goes in CSV)
 5. Invoice Email: separate field for billing (NOT in CSV, just listed separately)
