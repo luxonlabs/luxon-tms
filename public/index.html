@@ -1883,7 +1883,7 @@
       document.getElementById('aiDropZone').classList.remove('processing');
     }
 
-    function openAiReview(data){
+    function openAiReview(response){
       closeAiImport();
       var data = response.data;
       // Populate fields. API uses snake_case, TMS uses DOM IDs.
