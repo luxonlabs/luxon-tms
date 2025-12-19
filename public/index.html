@@ -1885,6 +1885,7 @@
 
     function openAiReview(data){
       closeAiImport();
+      var data = response.data;
       // Populate fields. API uses snake_case, TMS uses DOM IDs.
       document.getElementById('aiId').value = data.id || '';
       // Ensure date format YYYY-MM-DD
