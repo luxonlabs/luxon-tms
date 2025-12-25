@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0"
+    "@supabase/supabase-js": "^2.39.0"
   },
   "engines": {
     "node": ">=18"
