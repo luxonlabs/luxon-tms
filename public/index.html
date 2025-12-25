@@ -94,6 +94,24 @@
       margin-top: 15px;
       display: none;
     }
+    .success-msg {
+      color: #4ade80;
+      font-size: 0.9rem;
+      margin-top: 15px;
+      display: none;
+    }
+    .login-toggle {
+      color: #9ca3af;
+      font-size: 0.9rem;
+      margin-top: 20px;
+    }
+    .login-toggle a {
+      color: #60a5fa;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .login-toggle a:hover { text-decoration: underline; }
+    .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
     /* --- HIDE MAIN APP INITIALLY --- */
     #mainApp { display: none; }
@@ -142,6 +160,31 @@
       border-radius:999px;
       background:#22c55e;
       box-shadow:0 0 0 4px rgba(34,197,94,0.4);
+    }
+    .header-user {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-top: 10px;
+    }
+    .header-user-email {
+      color: #9ca3af;
+      font-size: 0.9rem;
+    }
+    .header-logout {
+      background: transparent;
+      border: 1px solid #dc2626;
+      color: #dc2626;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .header-logout:hover {
+      background: #dc2626;
+      color: white;
     }
 
     /* Top bar (Revenue Year) */
@@ -557,7 +600,37 @@
 </head>
 <body>
 
-  
+  <div id="loginOverlay">
+    <div class="login-box">
+      <div class="login-title">LUXON TMS</div>
+      <div class="login-subtitle">AI-Powered Load Management</div>
+      
+      <!-- Login Form -->
+      <div id="loginFormDiv">
+        <input type="email" id="loginEmail" class="login-input" placeholder="Email" />
+        <input type="password" id="loginPass" class="login-input" placeholder="Password" onkeypress="if(event.key==='Enter') doLogin()" />
+        <button class="login-btn" id="loginBtn" onclick="doLogin()">Sign In</button>
+        <div class="login-toggle">
+          Don't have an account? <a onclick="showRegisterForm()">Create one</a>
+        </div>
+      </div>
+
+      <!-- Register Form -->
+      <div id="registerFormDiv" style="display:none;">
+        <input type="text" id="registerName" class="login-input" placeholder="Full Name" />
+        <input type="text" id="registerCompany" class="login-input" placeholder="Company Name (optional)" />
+        <input type="email" id="registerEmail" class="login-input" placeholder="Email" />
+        <input type="password" id="registerPass" class="login-input" placeholder="Password (min 6 characters)" onkeypress="if(event.key==='Enter') doRegister()" />
+        <button class="login-btn" id="registerBtn" onclick="doRegister()">Create Account</button>
+        <div class="login-toggle">
+          Already have an account? <a onclick="showLoginForm()">Sign in</a>
+        </div>
+      </div>
+
+      <div id="loginError" class="error-msg"></div>
+      <div id="loginSuccess" class="success-msg"></div>
+    </div>
+  </div>
 
   <div class="container" id="mainApp">
     <div class="header">
@@ -565,6 +638,10 @@
       <div class="header-tag">
         <span class="header-tag-dot"></span>
         <span>REAL-TIME INSIGHTS FOR CARRIERS</span>
+      </div>
+      <div class="header-user">
+        <span class="header-user-email" id="userEmailDisplay"></span>
+        <button class="header-logout" onclick="doLogout()">Sign Out</button>
       </div>
     </div>
 
@@ -909,24 +986,229 @@
   </div>
 
   <script>
-    // ----------------------------------------------------
-    // APP PASSWORD HANDLING (SECURE)
-    // ----------------------------------------------------
-    let sessionPassword = ""; // Will store the entered password
+    // ============================================
+    // AUTH STATE & SESSION MANAGEMENT
+    // ============================================
+    
+    let currentUser = null;
+    let accessToken = null;
+    let refreshToken = null;
 
-    function doLogin() {
-      const input = document.getElementById('loginPass').value;
-      const errorMsg = document.getElementById('loginError');
-      
-      if(input && input.length > 0) {
-        sessionPassword = input; // Store temporarily
-        document.getElementById('loginOverlay').style.display = 'none';
-        document.getElementById('mainApp').style.display = 'block';
-        // Trigger auto restore only after login
-        autoRestoreIfEmpty();
-      } else {
-        errorMsg.style.display = 'block';
+    // Check for existing session on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      checkSession();
+    });
+
+    function checkSession() {
+      const storedSession = localStorage.getItem('luxon_session');
+      if (storedSession) {
+        const session = JSON.parse(storedSession);
+        accessToken = session.accessToken;
+        refreshToken = session.refreshToken;
+        validateSession();
       }
+    }
+
+    async function validateSession() {
+      try {
+        const response = await fetch('/api/auth?action=session', {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          currentUser = data.user;
+          showApp();
+        } else {
+          await tryRefreshSession();
+        }
+      } catch (error) {
+        console.error('Session validation error:', error);
+        logout();
+      }
+    }
+
+    async function tryRefreshSession() {
+      try {
+        const response = await fetch('/api/auth?action=refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          accessToken = data.session.accessToken;
+          refreshToken = data.session.refreshToken;
+          saveSession();
+          await validateSession();
+        } else {
+          logout();
+        }
+      } catch (error) {
+        logout();
+      }
+    }
+
+    function saveSession() {
+      localStorage.setItem('luxon_session', JSON.stringify({ accessToken, refreshToken }));
+    }
+
+    function logout() {
+      currentUser = null;
+      accessToken = null;
+      refreshToken = null;
+      localStorage.removeItem('luxon_session');
+      document.getElementById('loginOverlay').style.display = 'flex';
+      document.getElementById('mainApp').style.display = 'none';
+    }
+
+    function showLoginForm() {
+      document.getElementById('loginFormDiv').style.display = 'block';
+      document.getElementById('registerFormDiv').style.display = 'none';
+      document.getElementById('loginError').style.display = 'none';
+      document.getElementById('loginSuccess').style.display = 'none';
+    }
+
+    function showRegisterForm() {
+      document.getElementById('loginFormDiv').style.display = 'none';
+      document.getElementById('registerFormDiv').style.display = 'block';
+      document.getElementById('loginError').style.display = 'none';
+      document.getElementById('loginSuccess').style.display = 'none';
+    }
+
+    function showAuthError(message) {
+      const el = document.getElementById('loginError');
+      el.textContent = message;
+      el.style.display = 'block';
+      document.getElementById('loginSuccess').style.display = 'none';
+    }
+
+    function showAuthSuccess(message) {
+      const el = document.getElementById('loginSuccess');
+      el.textContent = message;
+      el.style.display = 'block';
+      document.getElementById('loginError').style.display = 'none';
+    }
+
+    async function doLogin() {
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPass').value;
+      const btn = document.getElementById('loginBtn');
+
+      if (!email || !password) {
+        showAuthError('Please enter email and password');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Signing in...';
+
+      try {
+        const response = await fetch('/api/auth?action=login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          currentUser = data.user;
+          accessToken = data.session.accessToken;
+          refreshToken = data.session.refreshToken;
+          saveSession();
+          showApp();
+        } else {
+          showAuthError(data.error || 'Login failed');
+        }
+      } catch (error) {
+        showAuthError('Network error. Please try again.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    }
+
+    async function doRegister() {
+      const fullName = document.getElementById('registerName').value.trim();
+      const companyName = document.getElementById('registerCompany').value.trim();
+      const email = document.getElementById('registerEmail').value.trim();
+      const password = document.getElementById('registerPass').value;
+      const btn = document.getElementById('registerBtn');
+
+      if (!email || !password) {
+        showAuthError('Please enter email and password');
+        return;
+      }
+
+      if (password.length < 6) {
+        showAuthError('Password must be at least 6 characters');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Creating account...';
+
+      try {
+        const response = await fetch('/api/auth?action=register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, fullName, companyName })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          if (data.requiresConfirmation) {
+            showAuthSuccess(data.message);
+            setTimeout(showLoginForm, 3000);
+          } else {
+            currentUser = data.user;
+            accessToken = data.session.accessToken;
+            refreshToken = data.session.refreshToken;
+            saveSession();
+            showApp();
+          }
+        } else {
+          showAuthError(data.error || 'Registration failed');
+        }
+      } catch (error) {
+        showAuthError('Network error. Please try again.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Create Account';
+      }
+    }
+
+    async function doLogout() {
+      try {
+        await fetch('/api/auth?action=logout', {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+      } catch (e) {}
+      logout();
+    }
+
+    function showApp() {
+      document.getElementById('loginOverlay').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'block';
+      
+      if (currentUser) {
+        document.getElementById('userEmailDisplay').textContent = currentUser.email;
+      }
+      
+      // Initialize app
+      restoreCollapse();
+      refreshStatuses();
+      sortLoadsByPickupDesc();
+      populateYearSelect();
+      updateLoadsTable();
+      updateStats();
+      updateBrokersTable();
+      updateLanesTable();
+      updateDirectoryTables();
+      autoRestoreIfEmpty();
     }
 
     // ----------------------
@@ -1957,16 +2239,15 @@
     function sendToAiApi(base64Data) {
       var API_URL = '/api/parse-rateconf';
       
-      // We use the password the user typed at the login screen
       var payload = { 
-        pdfBase64: base64Data,
-        password: sessionPassword
+        pdfBase64: base64Data
       };
 
       fetch(API_URL, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + accessToken
         },
         body: JSON.stringify(payload)
       })
@@ -2053,18 +2334,7 @@
     // ----------------------
     // Init
     // ----------------------
-    window.onload = async function(){
-      restoreCollapse();
-      refreshStatuses();
-      sortLoadsByPickupDesc();
-      populateYearSelect();
-      updateLoadsTable();
-      updateStats();
-      updateBrokersTable();
-      updateLanesTable();
-      updateDirectoryTables();
-      // await autoRestoreIfEmpty(); // Moved to login success
-    };
+    // Initialization now happens in showApp() after successful login
   </script>
 </body>
 </html>

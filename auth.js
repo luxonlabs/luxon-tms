@@ -1,6 +1,3 @@
-// /api/auth.js - Handles login, register, logout, and session validation
-// This is a catch-all auth endpoint for Luxon TMS
-
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -9,7 +6,6 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-    // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -71,7 +67,6 @@ async function handleRegister(req, res) {
         return res.status(400).json({ error: error.message });
     }
 
-    // Check if email confirmation is required
     if (data.user && !data.session) {
         return res.status(200).json({ 
             message: 'Please check your email to confirm your account',
@@ -128,14 +123,6 @@ async function handleLogin(req, res) {
 }
 
 async function handleLogout(req, res) {
-    // Get token from Authorization header
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-        const token = authHeader.substring(7);
-        // Sign out with the token
-        await supabase.auth.signOut({ scope: 'local' });
-    }
-    
     return res.status(200).json({ message: 'Logged out successfully' });
 }
 
@@ -147,7 +134,6 @@ async function handleSession(req, res) {
     }
 
     const token = authHeader.substring(7);
-
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error || !user) {
