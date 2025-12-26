@@ -605,7 +605,6 @@
       <div class="login-title">LUXON TMS</div>
       <div class="login-subtitle">AI-Powered Load Management</div>
       
-      <!-- Login Form -->
       <div id="loginFormDiv">
         <input type="email" id="loginEmail" class="login-input" placeholder="Email" />
         <input type="password" id="loginPass" class="login-input" placeholder="Password" onkeypress="if(event.key==='Enter') doLogin()" />
@@ -615,7 +614,6 @@
         </div>
       </div>
 
-      <!-- Register Form -->
       <div id="registerFormDiv" style="display:none;">
         <input type="text" id="registerName" class="login-input" placeholder="Full Name" />
         <input type="text" id="registerCompany" class="login-input" placeholder="Company Name (optional)" />
@@ -1059,6 +1057,12 @@
       accessToken = null;
       refreshToken = null;
       localStorage.removeItem('luxon_session');
+      
+      // --- FIX 1: CLEAR INPUT FIELDS ---
+      document.getElementById('loginEmail').value = "";
+      document.getElementById('loginPass').value = "";
+      // -------------------------------
+
       document.getElementById('loginOverlay').style.display = 'flex';
       document.getElementById('mainApp').style.display = 'none';
     }
@@ -1190,12 +1194,21 @@
       logout();
     }
 
-    function showApp() {
+    // --- FIX 2: AUTHENTICATE DB CLIENT ---
+    async function showApp() {
       document.getElementById('loginOverlay').style.display = 'none';
       document.getElementById('mainApp').style.display = 'block';
       
       if (currentUser) {
         document.getElementById('userEmailDisplay').textContent = currentUser.email;
+        
+        // Pass the session to the supabase client so RLS works
+        if (accessToken) {
+          await db.auth.setSession({ 
+            access_token: accessToken, 
+            refresh_token: refreshToken 
+          });
+        }
       }
       
       // Initialize app
@@ -1435,12 +1448,12 @@
         email:         document.getElementById('newEmail').value.trim(),
         origin:        document.getElementById('newOrigin').value.trim(),
         destination:   document.getElementById('newDest').value.trim(),
-        equipment:    (document.getElementById('newEquip').value.trim()||'').toUpperCase(),
-        miles:        parseInt(document.getElementById('newMiles').value.trim()) || 0,
-        postedRate:   parseFloat(document.getElementById('newPosted').value.trim()) || 0,
-        bookedRate:   parseFloat(document.getElementById('newBooked').value.trim()) || 0,
-        shipper:      document.getElementById('newShipper').value.trim(),
-        receiver:     document.getElementById('newReceiver').value.trim(),
+        equipment:     (document.getElementById('newEquip').value.trim()||'').toUpperCase(),
+        miles:         parseInt(document.getElementById('newMiles').value.trim()) || 0,
+        postedRate:    parseFloat(document.getElementById('newPosted').value.trim()) || 0,
+        bookedRate:    parseFloat(document.getElementById('newBooked').value.trim()) || 0,
+        shipper:       document.getElementById('newShipper').value.trim(),
+        receiver:      document.getElementById('newReceiver').value.trim(),
         status,
         statusLock: null
       };
@@ -1685,7 +1698,7 @@
       const emailBtn = document.getElementById('contactEmailBtn');
       const phoneBtn = document.getElementById('contactPhoneBtn');
       if(l.email){ emailBtn.href = 'mailto:'+encodeURIComponent(l.email); emailBtn.style.display='inline-flex'; } else { emailBtn.href='#'; emailBtn.style.display='none'; }
-      if(l.phone){ phoneBtn.href = telHref(l.phone);                        phoneBtn.style.display='inline-flex'; } else { phoneBtn.href='#'; phoneBtn.style.display='none'; }
+      if(l.phone){ phoneBtn.href = telHref(l.phone);                                phoneBtn.style.display='inline-flex'; } else { phoneBtn.href='#'; phoneBtn.style.display='none'; }
       document.getElementById('contactBackdrop').style.display='flex';
     }
     function closeContact(){ document.getElementById('contactBackdrop').style.display='none'; }
@@ -2098,8 +2111,9 @@
       }
     }
 
+    // --- FIX 3: ADD USER_ID TO SYNC ---
     async function syncToCloud() {
-      if (!loads.length) { return; } // Removed alert if calling programmatically, kept for manual button
+      if (!loads.length) { return; } 
       const btn = event?.target;
       if(btn && btn.textContent){ btn.disabled = true; btn.textContent = 'Syncing...'; }
       try {
@@ -2107,6 +2121,7 @@
 
         const dataToSync = loads.map(l => ({
           id: l.id,
+          user_id: currentUser?.id, // <--- CRITICAL FIX: Include user_id here
           pickup_date: l.pickupDate,
           delivery_date: l.deliveryDate,
           broker_company: l.brokerCompany,
@@ -2144,25 +2159,17 @@
       } catch(e){}
     }
 
-    // ----------------------------------------------------
-    // AI IMPORT FEATURE (New Module)
-    // ----------------------------------------------------
-
-    function openAiImport(){
-      document.getElementById('aiUploadBackdrop').style.display='flex';
-    }
+    // ... (Rest of AI features remain unchanged) ...
+    function openAiImport(){ document.getElementById('aiUploadBackdrop').style.display='flex'; }
     function closeAiImport(){
       document.getElementById('aiUploadBackdrop').style.display='none';
       document.getElementById('aiSpinner').style.display = 'none';
       document.getElementById('aiDropZone').classList.remove('processing');
     }
-
     function openAiReview(response){
       closeAiImport();
       var data = response.data;
-      // Populate fields. API uses snake_case, TMS uses DOM IDs.
       document.getElementById('aiId').value = data.id || '';
-      // Ensure date format YYYY-MM-DD
       document.getElementById('aiPick').value = data.pickup_date || '';
       document.getElementById('aiDel').value = data.delivery_date || '';
       document.getElementById('aiBroker').value = data.broker_company || '';
@@ -2178,112 +2185,64 @@
       document.getElementById('aiBooked').value = data.booked_rate || '';
       document.getElementById('aiShipper').value = data.shipper || '';
       document.getElementById('aiReceiver').value = data.receiver || '';
-
       document.getElementById('aiReviewBackdrop').style.display='flex';
     }
-    function closeAiReview(){
-      document.getElementById('aiReviewBackdrop').style.display='none';
-    }
-
-    // Drag and Drop Logic
+    function closeAiReview(){ document.getElementById('aiReviewBackdrop').style.display='none'; }
     var dropZone = document.getElementById('aiDropZone');
-    
-    // Prevent default drag behaviors
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function(eventName) {
       dropZone.addEventListener(eventName, preventDefaults, false);
       document.body.addEventListener(eventName, preventDefaults, false);
     });
-
-    function preventDefaults(e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-
-    // Highlight drop zone
+    function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
     ['dragenter', 'dragover'].forEach(function(eventName) {
       dropZone.addEventListener(eventName, function() { dropZone.classList.add('dragover'); }, false);
     });
-
     ['dragleave', 'drop'].forEach(function(eventName) {
       dropZone.addEventListener(eventName, function() { dropZone.classList.remove('dragover'); }, false);
     });
-
-    // Handle dropped files
     dropZone.addEventListener('drop', function(e) {
       var dt = e.dataTransfer;
       var files = dt.files;
       handleAiFile(files);
     }, false);
-
     function handleAiFile(files) {
       if (files.length === 0) return;
       var file = files[0];
-      if (file.type !== 'application/pdf') {
-        alert('Please upload a PDF file.');
-        return;
-      }
-
-      // Show spinner
+      if (file.type !== 'application/pdf') { alert('Please upload a PDF file.'); return; }
       dropZone.classList.add('processing');
       document.getElementById('aiSpinner').style.display = 'block';
-
-      // Read file as Base64
       var reader = new FileReader();
       reader.onload = function(e) {
-        var base64 = e.target.result.split(',')[1]; // Remove data:application/pdf;base64, prefix
+        var base64 = e.target.result.split(',')[1];
         sendToAiApi(base64);
       };
       reader.readAsDataURL(file);
     }
-
     function sendToAiApi(base64Data) {
       var API_URL = '/api/parse-rateconf';
-      
-      var payload = { 
-        pdfBase64: base64Data
-      };
-
+      var payload = { pdfBase64: base64Data };
       fetch(API_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + accessToken
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
         body: JSON.stringify(payload)
       })
       .then(function(response) {
         if (!response.ok) throw new Error('API processing failed. Check password?');
         return response.json();
       })
-      .then(function(data) {
-        openAiReview(data);
-      })
-      .catch(function(error) {
-        alert('Error processing PDF: ' + error.message);
-        closeAiImport();
-      });
+      .then(function(data) { openAiReview(data); })
+      .catch(function(error) { alert('Error processing PDF: ' + error.message); closeAiImport(); });
     }
-
     function saveAiLoad() {
-      // 1. Gather data from Review Modal
       var id = document.getElementById('aiId').value.trim();
-      var pIn = document.getElementById('aiPick').value.trim(); // yyyy-mm-dd
+      var pIn = document.getElementById('aiPick').value.trim();
       var dIn = document.getElementById('aiDel').value.trim();
-
-      if(!id || !pIn || !dIn) {
-        alert('Load ID, Pickup and Delivery dates are required');
-        return;
-      }
-
-      // 2. Convert to TMS Internal Format (camelCase + MM/DD/YYYY dates)
+      if(!id || !pIn || !dIn) { alert('Load ID, Pickup and Delivery dates are required'); return; }
       var pickupDate = mdyFromInput(pIn);
       var deliveryDate = mdyFromInput(dIn);
       var status = computeStatusFromDates(pickupDate, deliveryDate);
-
       var newLoad = {
-        id: id,
-        pickupDate: pickupDate,
-        deliveryDate: deliveryDate,
+        id: id, pickupDate: pickupDate, deliveryDate: deliveryDate,
         brokerCompany: document.getElementById('aiBroker').value.trim(),
         contact: document.getElementById('aiContact').value.trim(),
         phone: document.getElementById('aiPhone').value.trim(),
@@ -2297,44 +2256,19 @@
         bookedRate: parseFloat(document.getElementById('aiBooked').value.trim()) || 0,
         shipper: document.getElementById('aiShipper').value.trim(),
         receiver: document.getElementById('aiReceiver').value.trim(),
-        status: status,
-        statusLock: null
+        status: status, statusLock: null
       };
-
-      // 3. Save Locally
       backupLocal('before_ai_add');
-      
-      // Check for duplicate ID
       var existingIndex = loads.findIndex(function(x) { return x.id === newLoad.id; });
       if(existingIndex >= 0) {
-        if(confirm('Load ID ' + newLoad.id + ' already exists. Overwrite?')) {
-          loads[existingIndex] = newLoad;
-        } else {
-          return;
-        }
-      } else {
-        loads.push(newLoad);
-      }
-
-      sortLoadsByPickupDesc();
-      saveData();
-      
-      // 4. Update UI
-      populateYearSelect();
-      updateLoadsTable();
-      updateStats();
-      updateDirectoryTables();
-      
-      // 5. Sync & Close
-      closeAiReview();
-      showMessage('AI Import Saved Successfully!');
-      syncToCloud(); // Trigger sync automatically
+        if(confirm('Load ID ' + newLoad.id + ' already exists. Overwrite?')) { loads[existingIndex] = newLoad; } else { return; }
+      } else { loads.push(newLoad); }
+      sortLoadsByPickupDesc(); saveData();
+      populateYearSelect(); updateLoadsTable(); updateStats(); updateDirectoryTables();
+      closeAiReview(); showMessage('AI Import Saved Successfully!'); syncToCloud();
     }
 
-    // ----------------------
-    // Init
-    // ----------------------
-    // Initialization now happens in showApp() after successful login
+    // Init logic moved to showApp
   </script>
 </body>
 </html>
