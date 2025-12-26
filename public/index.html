@@ -1058,11 +1058,21 @@
       refreshToken = null;
       localStorage.removeItem('luxon_session');
       
-      // --- FIX 1: CLEAR INPUT FIELDS ---
+      // --- WIPE LOCAL DATA ---
+      loads = []; 
+      localStorage.removeItem(LOCAL_KEY); // This deletes the browser backup
+      
+      // --- CLEAR INPUT FIELDS ---
       document.getElementById('loginEmail').value = "";
       document.getElementById('loginPass').value = "";
-      // -------------------------------
 
+      // --- RESET UI (So it looks blank immediately) ---
+      updateLoadsTable();
+      updateStats();
+      updateBrokersTable();
+      updateLanesTable();
+      updateDirectoryTables();
+      
       document.getElementById('loginOverlay').style.display = 'flex';
       document.getElementById('mainApp').style.display = 'none';
     }
@@ -1186,11 +1196,45 @@
     }
 
     async function doLogout() {
+      // 1. SAFETY: Auto-sync before leaving
+      // Only runs if we have a user and loads to save
+      if (currentUser && loads.length > 0) {
+        try {
+          // We manually run the sync logic here to ensure it finishes before we wipe data
+          const dataToSync = loads.map(l => ({
+            id: l.id,
+            user_id: currentUser.id,
+            pickup_date: l.pickupDate,
+            delivery_date: l.deliveryDate,
+            broker_company: l.brokerCompany,
+            contact: l.contact,
+            phone: l.phone,
+            extension: l.extension,
+            email: l.email,
+            origin: l.origin,
+            destination: l.destination,
+            equipment: l.equipment,
+            miles: l.miles,
+            posted_rate: l.postedRate,
+            booked_rate: l.bookedRate,
+            shipper: l.shipper,
+            receiver: l.receiver,
+            status: l.status
+          }));
+          await db.from('loads').upsert(dataToSync, { onConflict: 'id' });
+        } catch (e) {
+          console.warn("Auto-sync failed, but proceeding with logout", e);
+        }
+      }
+
+      // 2. Call the server to invalidate the session
       try {
         await fetch('/api/auth?action=logout', {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
       } catch (e) {}
+
+      // 3. Wipe local data and switch screens
       logout();
     }
 
